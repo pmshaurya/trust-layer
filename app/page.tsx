@@ -11,7 +11,6 @@ import { useState } from "react";
 import type {
   DocType,
   PromptAnalysisResponse,
-  Assumption,
   GenerateResponse,
   ValidateResponse,
 } from "@/lib/types";
@@ -173,7 +172,7 @@ export default function HomePage() {
         <header className="mb-10">
           <h1 className="text-3xl font-bold">Trust Layer</h1>
           <p className="text-zinc-400 mt-1">
-            AI document review with two layers of trust.
+            AI document review and prompt analyzer with two layers of trust.
           </p>
         </header>
 
@@ -468,7 +467,7 @@ export default function HomePage() {
               />
             </div>
 
-            <article className="prose prose-invert prose-zinc max-w-none rounded-md border border-zinc-800 bg-zinc-900 px-6 py-5">
+            <article className="prose prose-invert prose-zinc prose-sm sm:prose-base max-w-none rounded-md border border-zinc-800 bg-zinc-900 px-6 py-5 prose-headings:font-semibold prose-h1:text-2xl prose-h1:mt-0 prose-h2:text-lg prose-h3:text-base">
               <ReactMarkdown>{generation.document}</ReactMarkdown>
             </article>
 
@@ -573,6 +572,17 @@ export default function HomePage() {
           </section>
         )}
       </div>
+      <footer className="mt-16 pb-8 text-center text-xs text-zinc-600">
+        Built by{" "}
+        <a
+          href="https://www.linkedin.com/in/shaurya-suman-552941a1/"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-zinc-400 hover:text-zinc-200 underline-offset-2 hover:underline"
+        >
+          Shaurya Suman
+        </a>
+      </footer>
     </main>
   );
 }

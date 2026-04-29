@@ -55,7 +55,7 @@ export default function ScoreBadge({
 
   return (
     <div
-      className={`flex flex-col items-center gap-2 rounded-xl border ${classes.border} ${classes.bg} px-6 py-5`}
+      className={`flex flex-col items-center gap-2 rounded-xl border ${classes.border} ${classes.bg} px-4 py-5 w-full`}
     >
       <span className="text-sm uppercase tracking-wide text-zinc-400">
         {label}
