@@ -99,7 +99,7 @@ User can copy the document to clipboard and start over.
 Both layers use the SAME formula. Only the rubric differs.
 
 Formula:
-Trust Score = 100 - (8 points per failed rule) - (3 points per risky assumption, capped at -20)
+Trust Score = 100 - (8 points per failed rule) - (5 points per risky assumption, capped at -40)
 
 (For Layer 1, "risky assumptions" doesn't apply — only the rule count contributes.)
 

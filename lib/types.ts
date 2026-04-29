@@ -98,10 +98,25 @@ export interface GenerateResponse {
 }
 
 /**
+ * A claim found in the generated document that the grounding auditor
+ * could not trace back to the user's original prompt or answers.
+ */
+export interface UngroundedClaim {
+  claim: string;    // The specific assertion (e.g., "Launch in 6 months")
+  section: string;  // The PRD section it appeared in (e.g., "Timeline")
+}
+
+/**
  * Response from POST /api/validate (Layer 2: document quality).
+ *
+ * Three signals contribute to the score (computed deterministically server-side):
+ *   - Structure rules (rule pass/fail)
+ *   - Grounding (ungrounded claims from independent auditor)
+ *   - Assumptions (risky self-flagged assumptions, factored upstream)
  */
 export interface ValidateResponse extends ScoreOutcome {
   rules: RuleResult[];
+  ungroundedClaims: UngroundedClaim[];
 }
 
 /**

@@ -11,18 +11,21 @@ import {
   PRD_CLARIFY_PROMPT,
   PRD_GENERATE_PROMPT,
   PRD_VALIDATE_PROMPT,
+  PRD_AUDIT_GROUNDING_PROMPT,
 } from "./prd";
 import {
   TECH_SPEC_ANALYZE_PROMPT,
   TECH_SPEC_CLARIFY_PROMPT,
   TECH_SPEC_GENERATE_PROMPT,
   TECH_SPEC_VALIDATE_PROMPT,
+  TECH_SPEC_AUDIT_GROUNDING_PROMPT,
 } from "./tech-spec";
 import {
   MEETING_NOTES_ANALYZE_PROMPT,
   MEETING_NOTES_CLARIFY_PROMPT,
   MEETING_NOTES_GENERATE_PROMPT,
   MEETING_NOTES_VALIDATE_PROMPT,
+  MEETING_NOTES_AUDIT_GROUNDING_PROMPT,
 } from "./meeting-notes";
 
 /**
@@ -37,6 +40,7 @@ const PROMPT_BUNDLES: Record<
     clarify: string;
     generate: string;
     validate: string;
+    auditGrounding: string;
   }
 > = {
   "prd": {
@@ -44,18 +48,21 @@ const PROMPT_BUNDLES: Record<
     clarify: PRD_CLARIFY_PROMPT,
     generate: PRD_GENERATE_PROMPT,
     validate: PRD_VALIDATE_PROMPT,
+    auditGrounding: PRD_AUDIT_GROUNDING_PROMPT,
   },
   "tech-spec": {
     analyze: TECH_SPEC_ANALYZE_PROMPT,
     clarify: TECH_SPEC_CLARIFY_PROMPT,
     generate: TECH_SPEC_GENERATE_PROMPT,
     validate: TECH_SPEC_VALIDATE_PROMPT,
+    auditGrounding: TECH_SPEC_AUDIT_GROUNDING_PROMPT,
   },
   "meeting-notes": {
     analyze: MEETING_NOTES_ANALYZE_PROMPT,
     clarify: MEETING_NOTES_CLARIFY_PROMPT,
     generate: MEETING_NOTES_GENERATE_PROMPT,
     validate: MEETING_NOTES_VALIDATE_PROMPT,
+    auditGrounding: MEETING_NOTES_AUDIT_GROUNDING_PROMPT,
   },
 };
 
@@ -85,4 +92,12 @@ export function getGeneratePrompt(docType: DocType): string {
  */
 export function getValidatePrompt(docType: DocType): string {
   return PROMPT_BUNDLES[docType].validate;
+}
+
+/**
+ * Layer 2 v2: Grounding auditor system prompt for the given doc type.
+ * Returns empty string for stubbed doc types.
+ */
+export function getAuditGroundingPrompt(docType: DocType): string {
+  return PROMPT_BUNDLES[docType].auditGrounding;
 }

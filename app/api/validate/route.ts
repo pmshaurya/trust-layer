@@ -1,44 +1,53 @@
 // app/api/validate/route.ts
 //
-// Layer 2: Document Quality Validator.
+// Layer 2 v2: Document Quality Validator with THREE signals.
 //
 // POST /api/validate
 // Body: {
-//   document: string,
-//   assumptions: Assumption[],
-//   docType: DocType
+//   document: string,                          // The generated PRD
+//   assumptions: Assumption[],                 // From /api/generate
+//   docType: DocType,
+//   prompt: string,                            // Original user prompt (for grounding audit)
+//   answers: { question: string, answer: string }[]  // Clarifying Q&A (for grounding audit)
 // }
-// Returns: ValidateResponse  ({ rules, score, recommendation })
+// Returns: ValidateResponse  ({ rules, ungroundedClaims, score, recommendation })
 //
-// Same structure as analyze-prompt, but:
-//   - Uses the DOCUMENT rubric (not prompt rubric)
-//   - Score factors in RISKY ASSUMPTIONS via computeDocumentScore
+// Flow:
+//   1. Validate body
+//   2. Call OpenAI for rule validation (existing prompt)
+//   3. Call OpenAI for grounding audit (NEW — independent auditor)
+//   4. Compute score deterministically with all three signals
+//   5. Return everything
 
 import { NextResponse } from "next/server";
 import { openai, OPENAI_MODEL } from "@/lib/openai";
 import { getDocumentRubric } from "@/lib/rubrics/document";
-import { getValidatePrompt } from "@/lib/prompts";
+import { getValidatePrompt, getAuditGroundingPrompt } from "@/lib/prompts";
 import { computeDocumentScore } from "@/lib/score";
 import { isDocTypeEnabled } from "@/lib/doc-types";
 import type {
   Assumption,
   DocType,
   RuleResult,
+  UngroundedClaim,
   ValidateResponse,
 } from "@/lib/types";
 
-/**
- * What we expect the AI to return — just rule results.
- * Score is computed server-side, not by the AI.
- */
 interface AIValidateResult {
   rules: RuleResult[];
 }
 
+interface AIGroundingResult {
+  ungroundedClaims: UngroundedClaim[];
+}
+
+interface QAPair {
+  question: string;
+  answer: string;
+}
+
 /**
- * Validate and clean the assumptions array passed from the client.
- * The /api/generate route already produced these; we trust the shape
- * but defensively filter malformed entries anyway.
+ * Defensive cleanup of assumptions array from the request body.
  */
 function sanitizeAssumptions(raw: unknown): Assumption[] {
   if (!Array.isArray(raw)) return [];
@@ -55,6 +64,37 @@ function sanitizeAssumptions(raw: unknown): Assumption[] {
     .filter((a) => a.text.length > 0);
 }
 
+/**
+ * Defensive cleanup of answers array from the request body.
+ */
+function sanitizeAnswers(raw: unknown): QAPair[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.filter(
+    (a): a is QAPair =>
+      typeof a === "object" &&
+      a !== null &&
+      typeof (a as QAPair).question === "string" &&
+      typeof (a as QAPair).answer === "string"
+  );
+}
+
+/**
+ * Defensive cleanup of ungrounded claims from the AI response.
+ */
+function sanitizeUngroundedClaims(raw: unknown): UngroundedClaim[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter(
+      (c): c is { claim: unknown; section: unknown } =>
+        typeof c === "object" && c !== null
+    )
+    .map((c) => ({
+      claim: typeof c.claim === "string" ? c.claim : "",
+      section: typeof c.section === "string" ? c.section : "",
+    }))
+    .filter((c) => c.claim.length > 0);
+}
+
 export async function POST(request: Request) {
   try {
     // 1. Parse and validate the request body.
@@ -63,6 +103,9 @@ export async function POST(request: Request) {
       typeof body.document === "string" ? body.document.trim() : "";
     const docType = body.docType as DocType;
     const assumptions = sanitizeAssumptions(body.assumptions);
+    const userPrompt =
+      typeof body.prompt === "string" ? body.prompt.trim() : "";
+    const answers = sanitizeAnswers(body.answers);
 
     if (!document) {
       return NextResponse.json(
@@ -78,63 +121,119 @@ export async function POST(request: Request) {
       );
     }
 
-    // 2. Look up the document rubric and validate prompt.
-    const rubric = getDocumentRubric(docType);
-    const systemPrompt = getValidatePrompt(docType);
+    if (!userPrompt) {
+      return NextResponse.json(
+        { error: "Original prompt is required for grounding audit." },
+        { status: 400 }
+      );
+    }
 
-    if (rubric.length === 0) {
+    // 2. Look up rubric and prompts for this doc type.
+    const rubric = getDocumentRubric(docType);
+    const validateSystemPrompt = getValidatePrompt(docType);
+    const groundingSystemPrompt = getAuditGroundingPrompt(docType);
+
+    if (rubric.length === 0 || !validateSystemPrompt || !groundingSystemPrompt) {
       return NextResponse.json(
         {
-          error: `No document rubric defined for '${docType}'. This doc type is stubbed.`,
+          error: `Validation rubric or prompts not defined for '${docType}'.`,
         },
         { status: 400 }
       );
     }
 
-    // 3. Build the user message: the document + the rubric to check against.
-    const userMessage = `Document to evaluate:\n\n"""\n${document}\n"""\n\nRubric (evaluate each rule, in this order):\n${rubric
+    // 3. Build the user messages.
+    const validateUserMessage = `Document to evaluate:\n\n"""\n${document}\n"""\n\nRubric (evaluate each rule, in this order):\n${rubric
       .map((r, i) => `${i + 1}. ${r}`)
       .join("\n")}`;
 
-    // 4. Call OpenAI in JSON mode.
-    const completion = await openai.chat.completions.create({
-      model: OPENAI_MODEL,
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userMessage },
-      ],
-      response_format: { type: "json_object" },
-      temperature: 0.2, // Low for consistent rule judgments
-    });
+    const answersBlock =
+      answers.length > 0
+        ? answers
+            .map(
+              ({ question, answer }, i) =>
+                `${i + 1}. Q: ${question}\n   A: ${answer.trim() || "(skipped)"}`
+            )
+            .join("\n")
+        : "(no clarifying answers provided)";
 
-    const rawContent = completion.choices[0]?.message?.content;
-    if (!rawContent) {
+    const groundingUserMessage = `User's original prompt:\n\n"""\n${userPrompt}\n"""\n\nClarifying Q&A:\n${answersBlock}\n\nGenerated document to audit for grounding:\n\n"""\n${document}\n"""`;
+
+    // 4. Run BOTH AI calls in parallel — they don't depend on each other.
+    const [validateCompletion, groundingCompletion] = await Promise.all([
+      openai.chat.completions.create({
+        model: OPENAI_MODEL,
+        messages: [
+          { role: "system", content: validateSystemPrompt },
+          { role: "user", content: validateUserMessage },
+        ],
+        response_format: { type: "json_object" },
+        temperature: 0.2,
+      }),
+      openai.chat.completions.create({
+        model: OPENAI_MODEL,
+        messages: [
+          { role: "system", content: groundingSystemPrompt },
+          { role: "user", content: groundingUserMessage },
+        ],
+        response_format: { type: "json_object" },
+        temperature: 0.2,
+      }),
+    ]);
+
+    // 5. Parse and validate the rule check response.
+    const validateRaw = validateCompletion.choices[0]?.message?.content;
+    if (!validateRaw) {
       return NextResponse.json(
-        { error: "AI returned an empty response." },
+        { error: "AI returned an empty rule-check response." },
         { status: 502 }
       );
     }
 
-    // 5. Parse the AI's JSON.
-    let aiResult: AIValidateResult;
+    let validateResult: AIValidateResult;
     try {
-      aiResult = JSON.parse(rawContent);
+      validateResult = JSON.parse(validateRaw);
     } catch {
       return NextResponse.json(
-        { error: "AI returned invalid JSON. Please try again." },
+        { error: "AI returned invalid JSON for rule check." },
+        { status: 502 }
+      );
+    }
+    const rules = Array.isArray(validateResult.rules) ? validateResult.rules : [];
+
+    // 6. Parse and validate the grounding audit response.
+    const groundingRaw = groundingCompletion.choices[0]?.message?.content;
+    if (!groundingRaw) {
+      return NextResponse.json(
+        { error: "AI returned an empty grounding response." },
         { status: 502 }
       );
     }
 
-    const rules = Array.isArray(aiResult.rules) ? aiResult.rules : [];
+    let groundingResult: AIGroundingResult;
+    try {
+      groundingResult = JSON.parse(groundingRaw);
+    } catch {
+      return NextResponse.json(
+        { error: "AI returned invalid JSON for grounding audit." },
+        { status: 502 }
+      );
+    }
+    const ungroundedClaims = sanitizeUngroundedClaims(
+      groundingResult.ungroundedClaims
+    );
 
-    // 6. Compute the score deterministically.
-    // This factors in BOTH failed rules AND risky assumptions.
-    const { score, recommendation } = computeDocumentScore(rules, assumptions);
+    // 7. Compute the score deterministically with all three signals.
+    const { score, recommendation } = computeDocumentScore(
+      rules,
+      assumptions,
+      ungroundedClaims
+    );
 
-    // 7. Return the full response.
+    // 8. Return the full response.
     const response: ValidateResponse = {
       rules,
+      ungroundedClaims,
       score,
       recommendation,
     };

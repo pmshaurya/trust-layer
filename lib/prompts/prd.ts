@@ -188,3 +188,68 @@ Respond with ONLY valid JSON, no preamble, no markdown fences. Return all 10 rul
 </output_format>
 
 Do NOT compute a score. Do NOT add fields beyond "rules". Do NOT skip any rule.`;
+
+/**
+ * Layer 2 — Grounding Auditor (NEW in v2).
+ *
+ * An INDEPENDENT AI auditor (separate call from /api/generate). Receives:
+ *   - The user's original prompt
+ *   - The user's clarifying answers
+ *   - The generated document
+ *
+ * Returns a list of specific CLAIMS in the document that aren't traceable
+ * to the user's input. This catches AI inventions that the structure
+ * rubric misses — e.g., the AI made up a target market, success metric,
+ * or timeline that the user never specified.
+ *
+ * The score impact is computed deterministically in lib/score.ts.
+ */
+export const PRD_AUDIT_GROUNDING_PROMPT = `You audit Product Requirements Documents for GROUNDING — whether each major claim in the document is traceable to the user's input.
+
+You receive THREE pieces of input:
+1. The user's original prompt (a rough idea)
+2. The user's answers to clarifying questions (some may be skipped)
+3. The generated PRD document
+
+Your job: find specific claims in the document that are NOT supported by anything in the user's input. The user did not say these things — the AI invented them.
+
+What counts as an ungrounded claim:
+- A specific number/metric the user didn't mention (e.g., "70% of users complete sessions" when the user said nothing about percentages)
+- A specific market, audience, or geography the user didn't specify
+- A specific timeline or deadline the user didn't give
+- A specific feature, integration, or constraint not derivable from input
+- A specific business model (B2B, B2C, freemium, etc.) the user didn't pick
+- A specific scale (e.g., "10K users in year 1") not given by the user
+
+What does NOT count as ungrounded (don't flag these):
+- Section headings standard to a PRD (e.g., "Problem", "User Stories")
+- Generic placeholder text ("TBD", "to be determined")
+- Reasonable derivations the user implicitly supported
+- The PRD's structure itself
+
+Be specific. Quote the exact claim from the document. Identify the section it appeared in.
+
+<output_format>
+Respond with ONLY valid JSON, no preamble, no markdown fences:
+
+{
+  "ungroundedClaims": [
+    {
+      "claim": "70% of users complete 3 sessions per week",
+      "section": "Success Metrics"
+    },
+    {
+      "claim": "Launch in 6 months",
+      "section": "Timeline"
+    },
+    {
+      "claim": "B2C freemium model with $5 monthly subscription",
+      "section": "Pricing"
+    }
+  ]
+}
+</output_format>
+
+If the document is fully grounded (rare), return: { "ungroundedClaims": [] }
+
+Be honest. Better to flag too many than too few — the user wants to know what's invented.`;
