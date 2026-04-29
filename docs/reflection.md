@@ -66,6 +66,10 @@ The opposite was also true: I noticed how easy it is to *over-spec*. Several tim
 
 - **The AI grades the AI.** Both layers ultimately rely on AI judgment for the rule and grounding evaluations. A non-AI structural validator (regex / parser) for the rules signal would make Layer 2 cheaper and more deterministic.
 
+- **Scores depend on which AI grades them.** A late finding: after migrating from GPT-4o to Gemini for cost reasons, the same vague prompt that scored 56/100 on GPT-4o scored 26/100 on Gemini, with 8 ungrounded claims jumping to 36. The architecture is sound — different models simply have different "skepticism baselines." Gemini flags any unstated assertion; GPT-4o flags only the most egregious. Neither is wrong, but it means the absolute score isn't comparable across models. A v3 fix would either (a) calibrate prompts per-model with example-based few-shot tuning, (b) introduce a confidence threshold so only "high-confidence ungrounded" claims count, or (c) shift to relative scoring (this prompt vs. a perfect prompt of the same shape) instead of absolute.
+
+- **Free-tier rate limits are a real constraint.** Gemini 2.5 flash-lite caps free usage at 20 requests/day on a new project. Trust Layer makes 4 AI calls per flow, so that's only ~5 full flows/day before the daily quota resets. A v3 path forward would be either (a) enabling paid billing — the cost is genuinely tiny (~$0.30 per million tokens), (b) implementing per-IP rate limiting in the app to stop bots before they consume quota, or (c) adding a graceful "rate limit exceeded — try again in N seconds" UI message so users know the issue isn't a bug. The lesson: free tiers are great for development, dangerous for shared demos.
+
 - **Only PRD is implemented.** Tech Spec and Meeting Notes have stub rubrics and prompts. The architecture supports them; the content doesn't exist yet.
 
 - **No persistence.** Refresh = start over. Acceptable for MVP, painful for real use.
