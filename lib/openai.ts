@@ -1,34 +1,54 @@
-// lib/openai.ts
-//
-// OpenAI SDK client singleton.
-//
-// All API routes import { openai, OPENAI_MODEL } from "@/lib/openai".
-// Centralizes API key handling and model selection in ONE place,
-// so swapping models or providers is a single-file change.
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
-import OpenAI from "openai";
+const apiKey = process.env.GEMINI_API_KEY;
 
-// Read config from environment. process.env values are always string | undefined.
-const apiKey = process.env.OPENAI_API_KEY;
-
-// Fail fast if the key is missing, with a useful error message.
-// Better to crash on startup than silently 401 inside a request handler.
 if (!apiKey) {
   throw new Error(
-    "OPENAI_API_KEY is not set. Add it to .env.local in the project root."
+    "GEMINI_API_KEY is not set. Add it to .env.local in the project root."
   );
 }
 
-/**
- * The OpenAI client used everywhere we need to talk to the API.
- * Imported by all four API routes (analyze-prompt, clarify, generate, validate).
- */
-export const openai = new OpenAI({ apiKey });
+const genAI = new GoogleGenerativeAI(apiKey);
 
-/**
- * Default model to use across all calls.
- * Override per-call if a specific route needs a cheaper or different model.
- *
- * Falls back to "gpt-4o" if OPENAI_MODEL is not set in env.
- */
-export const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4o";
+export const OPENAI_MODEL = process.env.GEMINI_MODEL || "gemini-1.5-flash";
+
+export const openai = {
+  chat: {
+    completions: {
+      async create(opts: {
+        model: string;
+        messages: { role: string; content: string }[];
+        response_format?: { type: string };
+        temperature?: number;
+      }) {
+        const systemMsg = opts.messages.find((m) => m.role === "system");
+        const userMsg = opts.messages.find((m) => m.role === "user");
+
+        const model = genAI.getGenerativeModel({
+          model: opts.model,
+          systemInstruction: systemMsg?.content,
+          generationConfig: {
+            temperature: opts.temperature ?? 0.5,
+            responseMimeType:
+              opts.response_format?.type === "json_object"
+                ? "application/json"
+                : "text/plain",
+          },
+        });
+
+        const result = await model.generateContent(userMsg?.content ?? "");
+        const text = result.response.text();
+
+        return {
+          choices: [
+            {
+              message: {
+                content: text,
+              },
+            },
+          ],
+        };
+      },
+    },
+  },
+};
