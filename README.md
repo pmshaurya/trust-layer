@@ -1,96 +1,88 @@
 # Trust Layer
 
-> AI document review and prompt analyzer with two layers of trust.
+**An AI document review system that catches hallucinated or unsupported claims — before and after generation.**
 
-**🌐 Live demo:** https://trust-layer-theta.vercel.app
-**📐 Built with spec-driven development** — see [docs/](./docs)
+Trust Layer adds two independent verification layers around AI-generated documents. Instead of trusting a confident-sounding output, it scores the *input* for vagueness and missing context before generation, then scores the *output* for structural completeness, grounding (does every claim trace back to something the user actually said?), and self-flagged assumptions.
 
----
-
-## What it does
-
-Most AI tools generate documents fast and leave you to verify them slowly. Trust Layer adds two trust layers around AI document creation:
-
-- **Layer 1 — Prompt Quality (before generation):** Scores the user's prompt against a doc-type-specific rubric. Flags vagueness, surfaces missing context, suggests improvements — before a single token gets generated.
-- **Layer 2 — Document Quality (after generation):** Three independent signals combined into a deterministic score.
-  1. **Structure** — does the document have all required sections?
-  2. **Grounding** — an independent AI auditor compares the document to your input and flags anything that wasn't traceable. This catches AI hallucinations the structure check misses.
-  3. **Assumptions** — the AI's self-flagged risky guesses, each one penalizing the score.
-
-You see two scores side by side: how good was your input, how trustworthy is the output. Every claim, every rule, every assumption is itemized — the math is auditable.
+Built as a hands-on exploration of AI trust and governance — a problem every team shipping AI-generated content into enterprise workflows eventually runs into.
 
 ---
 
-## Why this matters
+## Why this exists
 
-A confident-sounding AI fills every section beautifully, even with information it invented. Existing tools score "did the AI fill in every section?" — Trust Layer scores "is each section actually grounded in what you asked for?"
-
-The architecture is document-type agnostic. The MVP ships with PRD support; Tech Spec and Meeting Notes are stubbed via the same plug-in pattern. Adding a new doc type means one rubric file plus one prompts file — no core code changes.
-
----
-
-## Tech stack
-
-- Next.js 16 (App Router) with TypeScript
-- Tailwind CSS v4 + Typography plugin
-- OpenAI SDK (gpt-4o)
-- react-markdown for document rendering
-- Deployed on Vercel
-
----
+AI-generated documents (PRDs, specs, meeting notes) read as authoritative even when they're partly fabricated. Most teams have no systematic way to catch this beyond a human skimming the output. Trust Layer is a working exploration of what a lightweight, auditable trust layer could look like: deterministic, server-side scoring rather than "trust the model's own confidence."
 
 ## How it works
 
-```
-1. Select doc type (PRD)
-2. Input rough prompt
-3. Layer 1 — prompt analyzed, scored, suggestions shown
-4. Clarifying questions generated; user answers or skips
-5. Document generated with self-flagged assumptions
-6. Layer 2 — document validated (structure + grounding audit + assumptions)
-7. Review screen shows both scores + document + every flagged item
-```
+1. **Pick a document type** (currently: PRD — Tech Spec and Meeting Notes are stubbed for future support).
+2. **Layer 1 — Prompt validation.** Before anything is generated, the prompt is scored against a document-type-specific rubric and flagged for vagueness or missing context, with suggestions to improve it.
+3. **Generate.** The document is produced, with any assumptions the model made explicitly flagged inline rather than buried.
+4. **Layer 2 — Output validation.** The generated document is checked against three signals: structural completeness, grounding (do claims trace back to the user's actual inputs?), and flagged-assumption density.
+5. **Review.** Both the prompt score and the document score are shown side by side with the full validation breakdown — nothing is a black-box number.
 
-All four AI calls (analyze-prompt, clarify, generate, validate) use deterministic JSON output. Scores are computed server-side, never by the AI itself, so users can audit the math.
+All scoring runs as deterministic, server-side JSON operations, so the math behind every score is inspectable rather than "the model said so."
 
----
+## Tech stack
 
-## Spec-driven development
+- **Framework:** Next.js 16 (App Router), TypeScript
+- **Styling:** Tailwind CSS v4 + Typography plugin
+- **AI:** OpenAI (GPT-4o), with Google Generative AI (Gemini) support
+- **Rendering:** react-markdown
+- **Deployment:** Vercel
 
-This project was built using spec-driven development. Every line of code was preceded by a written specification. The full planning chain lives in [docs/](./docs):
+## Demo status
 
-- [scope.md](./docs/scope.md) — high-level scope (problem, users, why)
-- [prd.md](./docs/prd.md) — product requirements
-- [spec.md](./docs/spec.md) — technical blueprint
-- [checklist.md](./docs/checklist.md) — phased build plan with verification steps
-- [reflection.md](./docs/reflection.md) — what was learned, what to do differently
+This project was built for [Devpost's Spec-Driven Development Learning Hackathon](https://devpost.com/). The live Vercel deployment has since had its API keys deactivated to avoid ongoing inference costs — it's not currently live.
 
-Even [CLAUDE.md](./CLAUDE.md) at the repo root is a spec — persistent context for the AI assistant that helped build the project.
+To see it in action without running it locally, [add a link to a screen recording or a few screenshots here].
 
----
+To run it yourself, see **Getting Started** below.
 
-## Local setup
+## Getting started
 
 ```bash
 git clone https://github.com/pmshaurya/trust-layer.git
 cd trust-layer
 npm install
-echo "OPENAI_API_KEY=sk-..." > .env.local
-echo "OPENAI_MODEL=gpt-4o" >> .env.local
+```
+
+Add your API key(s) to a `.env.local` file:
+
+```
+OPENAI_API_KEY=your_key_here
+# optional, if using Gemini instead of / alongside OpenAI
+GOOGLE_GENERATIVE_AI_API_KEY=your_key_here
+```
+
+Then run the dev server:
+
+```bash
 npm run dev
 ```
 
-Open http://localhost:3000.
+Open [http://localhost:3000](http://localhost:3000).
 
----
+## Project structure
 
-## Built by
+```
+/app      — Next.js app router pages and API routes
+/lib      — scoring logic, validation rubrics, prompt templates
+/public   — static assets
+/docs     — spec-driven development docs: scope, PRD, technical blueprint, build checklist, and process reflections
+```
 
-[Shaurya Suman](https://www.linkedin.com/in/shaurya-suman-552941a1/)
+This project followed a spec-driven development approach — every feature was specified in `/docs` before any code was written. Worth a look if you're curious how the trust-scoring logic was designed, not just how it's implemented.
 
-Built for [Devpost's Spec-Driven Development Learning Hackathon](https://learn-ai.devpost.com/).
+## Roadmap
 
----
+- [ ] Tech Spec document type
+- [ ] Meeting Notes document type
+- [ ] Configurable rubrics per organization/team
+- [ ] Historical scoring trends across a user's documents
+
+## Background
+
+Built by [Shaurya Suman](https://www.linkedin.com/in/shaurya-suman-552941a1/) — Senior Product Manager, exploring AI trust and governance hands-on rather than just from the product-requirements side.
 
 ## License
 
