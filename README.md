@@ -34,8 +34,6 @@ All scoring runs as deterministic, server-side JSON operations, so the math behi
 
 This project was built for [Devpost's Spec-Driven Development Learning Hackathon](https://devpost.com/). The live Vercel deployment has since had its API keys deactivated to avoid ongoing inference costs — it's not currently live.
 
-To see it in action without running it locally, [add a link to a screen recording or a few screenshots here].
-
 To run it yourself, see **Getting Started** below.
 
 ## Getting started
